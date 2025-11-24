@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>2026软考高项 - 终极备考系统 V5.0</title>
+    
+    <!-- 核心依赖 -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; 
+            background-color: #f3f4f6; 
+            -webkit-tap-highlight-color: transparent;
+            padding-bottom: env(safe-area-inset-bottom);
+            color: #1f2937;
+        }
+
+        /* 滚动条优化 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* 背诵模糊特效 */
+        .blur-text {
+            color: transparent !important;
+            text-shadow: 0 0 12px rgba(0,0,0,0.15);
+            background-color: #e5e7eb;
+            border-radius: 4px;
+            user-select: none;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        .blur-text:active, .blur-text.revealed {
+            color: inherit !important;
+            text-shadow: none;
+            background-color: transparent;
+        }
+        
+        /* 动画 */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        .anim-fade { animation: fadeIn 0.3s ease-out forwards; }
+
+        /* 截图专用 */
+        .screenshot-target {
+            position: fixed; left: -9999px; top: 0; width: 1200px; background: white; z-index: -1;
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4f46e5',
+                        secondary: '#f59e0b',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        // --- 1. 图标组件库 ---
+        const Icon = ({ path, size = 18, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={{display:'inline-block', verticalAlign:'text-bottom'}}>
+                {path}
+            </svg>
+        );
+
+        const Icons = {
+            Grid: <g><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></g>,
+            Book: <g><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></g>,
+            Chart: <g><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></g>,
+            Bulb: <g><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-1 1.5-2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></g>,
+            Pen: <g><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></g>,
+            Camera: <g><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></g>,
+            Close: <g><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></g>,
+            Eye: <g><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></g>,
+            EyeOff: <g><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></g>,
+            ArrowRight: <g><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></g>,
+            Zap: <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>,
+            Check: <g><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></g>,
+            Trash: <g><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></g>,
+            // 补充的特定图标
+            ScrollText: <g><path d="M15 12h-5"/><path d="M15 8h-5"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"/></g>, // 章程
+            Users: <g><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></g>, // 干系人
+            ClipboardList: <g><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></g>, // 登记册
+            FileText: <g><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></g>, // 文件
+            Globe: <g><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></g>, // EEF
+            Briefcase: <g><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></g>, // OPA
+            FileSignature: <g><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M15 19a6 6 0 0 0-6-6"/><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14 2z"/><path d="M8 13h6"/></g>, // 协议
+            BrainCircuit: <g><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M9 13a4.5 4.5 0 0 0 3-4"/><path d="M6.003 5.125A3 3 0 0 1 19.528 16.317 6 6 0 0 0 12 22"/></g>, // 专家判断
+            PieChart: <g><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></g>, // 分析
+            Gavel: <g><path d="m14 13-7.5 7.5c-.83.83-2.17.83-3 0 0 0 0 0 0 0a2.12 2.12 0 0 1 0-3L11 10"/><path d="m16 16 6-6"/><path d="m8 8 6-6"/><path d="m9 7 8 8"/><path d="m21 11-8-8"/></g>, // 决策
+            Megaphone: <g><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></g>, // 沟通
+            Database: <g><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></g>, // PMIS
+            AlertTriangle: <g><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></g>, // 变更
+            CheckCircle: <g><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></g>, // 批准
+            Activity: <g><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></g>, // 绩效数据
+            Presentation: <g><path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3"/><path d="m7 21 5-5 5 5"/></g>, // 报告
+            Package: <g><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></g>, // 成果
+            Menu: <g><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="18" x2="20" y2="18"/></g>,
+            Coins: <g><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></g>,
+            Shield: <g><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></g>,
+            RefreshCw: <g><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></g>,
+        };
+
+        // --- 2. 样式映射 (全图标覆盖) ---
+        const STYLE_MAP = {
+            // 基础文档
+            "项目章程": { icon: Icons.ScrollText, color: "bg-yellow-100 text-yellow-900 border-yellow-300" },
+            "项目管理计划": { icon: Icons.Book, color: "bg-blue-100 text-blue-900 border-blue-300" },
+            "项目文件": { icon: Icons.ClipboardList, color: "bg-slate-100 text-slate-800 border-slate-300" },
+            "事业环境因素": { icon: Icons.Globe, color: "bg-orange-100 text-orange-900 border-orange-300" },
+            "组织过程资产": { icon: Icons.Briefcase, color: "bg-red-100 text-red-900 border-red-300" },
+            "立项管理文件": { icon: Icons.FileText, color: "bg-gray-100 text-gray-800 border-gray-300" },
+            "协议": { icon: Icons.FileSignature, color: "bg-indigo-100 text-indigo-900 border-indigo-300" },
+            "采购文档": { icon: Icons.FileText, color: "bg-orange-100 text-orange-800 border-orange-300" },
+            "商业文件": { icon: Icons.FileText, color: "bg-gray-100 text-gray-800 border-gray-300" },
+            
+            // 核心工具
+            "专家判断": { icon: Icons.BrainCircuit, color: "bg-purple-100 text-purple-900 border-purple-300" },
+            "会议": { icon: Icons.Users, color: "bg-green-100 text-green-900 border-green-300" },
+            "数据收集": { icon: Icons.Search, color: "bg-cyan-100 text-cyan-900 border-cyan-300" },
+            "数据分析": { icon: Icons.PieChart, color: "bg-sky-100 text-sky-900 border-sky-300" },
+            "决策": { icon: Icons.Gavel, color: "bg-stone-100 text-stone-800 border-stone-300" },
+            "数据表现": { icon: Icons.Chart, color: "bg-amber-100 text-amber-900 border-amber-300" },
+            "人际关系与团队技能": { icon: Icons.Users, color: "bg-rose-100 text-rose-900 border-rose-300" },
+            "沟通技能": { icon: Icons.Megaphone, color: "bg-pink-100 text-pink-900 border-pink-300" },
+            "项目管理信息系统": { icon: Icons.Database, color: "bg-emerald-100 text-emerald-900 border-emerald-300" },
+            
+            // 核心输出
+            "变更请求": { icon: Icons.AlertTriangle, color: "bg-fuchsia-100 text-fuchsia-900 border-fuchsia-300" },
+            "批准的变更请求": { icon: Icons.CheckCircle, color: "bg-fuchsia-200 text-fuchsia-950 border-fuchsia-400" },
+            "工作绩效数据": { icon: Icons.Activity, color: "bg-gray-200 text-gray-800 border-gray-400" },
+            "工作绩效信息": { icon: Icons.FileText, color: "bg-blue-200 text-blue-900 border-blue-400" },
+            "工作绩效报告": { icon: Icons.Presentation, color: "bg-indigo-200 text-indigo-900 border-indigo-400" },
+            "可交付成果": { icon: Icons.Package, color: "bg-teal-100 text-teal-900 border-teal-300" },
+            "核实的可交付成果": { icon: Icons.CheckCircle, color: "bg-teal-200 text-teal-950 border-teal-400" },
+            "验收的可交付成果": { icon: Icons.CheckCircle, color: "bg-teal-300 text-teal-950 border-teal-500" },
+            
+            // 登记册/日志
+            "风险登记册": { icon: Icons.ClipboardList, color: "bg-red-50 text-red-700 border-red-200" },
+            "干系人登记册": { icon: Icons.Users, color: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+            "问题日志": { icon: Icons.List, color: "bg-rose-100 text-rose-800 border-rose-200" },
+            "经验教训登记册": { icon: Icons.Book, color: "bg-yellow-50 text-yellow-800 border-yellow-200" },
+            "假设日志": { icon: Icons.List, color: "bg-gray-100 text-gray-700 border-gray-200" },
+        };
+
+        // --- 3. 完整数据 ---
+        const PROCESS_GROUPS = ["启动", "规划", "执行", "监控", "收尾"];
+        const KNOWLEDGE_AREAS = [
+            { id: "integration", name: "整合管理", color: "bg-yellow-50 border-yellow-200 text-yellow-900", darkColor: "bg-yellow-100" },
+            { id: "scope", name: "范围管理", color: "bg-sky-50 border-sky-200 text-sky-900", darkColor: "bg-sky-100" },
+            { id: "schedule", name: "进度管理", color: "bg-emerald-50 border-emerald-200 text-emerald-900", darkColor: "bg-emerald-100" },
+            { id: "cost", name: "成本管理", color: "bg-rose-50 border-rose-200 text-rose-900", darkColor: "bg-rose-100" },
+            { id: "quality", name: "质量管理", color: "bg-violet-50 border-violet-200 text-violet-900", darkColor: "bg-violet-100" },
+            { id: "resource", name: "资源管理", color: "bg-orange-50 border-orange-200 text-orange-900", darkColor: "bg-orange-100" },
+            { id: "communication", name: "沟通管理", color: "bg-pink-50 border-pink-200 text-pink-900", darkColor: "bg-pink-100" },
+            { id: "risk", name: "风险管理", color: "bg-slate-100 border-slate-300 text-slate-900", darkColor: "bg-slate-200" },
+            { id: "procurement", name: "采购管理", color: "bg-teal-50 border-teal-200 text-teal-900", darkColor: "bg-teal-100" },
+            { id: "stakeholder", name: "干系人管理", color: "bg-indigo-50 border-indigo-200 text-indigo-900", darkColor: "bg-indigo-100" },
+        ];
+
+        const PROCESS_DATA = [
+            // 整合
+            { ka: "integration", pg: "启动", name: "制定项目章程", i: ["立项管理文件", "协议", "事业环境因素", "组织过程资产"], t: ["专家判断", "数据收集", "人际关系与团队技能", "会议"], o: ["项目章程", "假设日志"] },
+            { ka: "integration", pg: "规划", name: "制定项目管理计划", i: ["项目章程", "其他过程的输出", "事业环境因素", "组织过程资产"], t: ["专家判断", "数据收集", "人际关系与团队技能", "会议"], o: ["项目管理计划"] },
+            { ka: "integration", pg: "执行", name: "指导与管理项目工作", i: ["项目管理计划", "项目文件", "批准的变更请求", "事业环境因素", "组织过程资产"], t: ["专家判断", "项目管理信息系统", "会议"], o: ["可交付成果", "工作绩效数据", "问题日志", "变更请求", "项目管理计划(更新)", "项目文件(更新)", "组织过程资产(更新)"] },
+            { ka: "integration", pg: "执行", name: "管理项目知识", i: ["项目管理计划", "项目文件", "可交付成果", "事业环境因素", "组织过程资产"], t: ["专家判断", "知识管理", "信息管理", "人际关系与团队技能"], o: ["经验教训登记册", "项目管理计划(更新)", "组织过程资产(更新)"] },
+            { ka: "integration", pg: "监控", name: "监控项目工作", i: ["项目管理计划", "项目文件", "工作绩效信息", "协议", "事业环境因素", "组织过程资产"], t: ["专家判断", "数据分析", "决策", "会议"], o: ["工作绩效报告", "变更请求", "项目管理计划(更新)", "项目文件(更新)"] },
+            { ka: "integration", pg: "监控", name: "实施整体变更控制", i: ["项目管理计划", "项目文件", "工作绩效报告", "变更请求", "事业环境因素", "组织过程资产"], t: ["专家判断", "变更控制工具", "数据分析", "决策", "会议"], o: ["批准的变更请求", "变更日志", "项目管理计划(更新)", "项目文件(更新)"] },
+            { ka: "integration", pg: "收尾", name: "结束项目或阶段", i: ["项目章程", "项目管理计划", "项目文件", "验收的可交付成果", "商业文件", "协议", "采购文档", "组织过程资产"], t: ["专家判断", "数据分析", "会议"], o: ["最终产品/服务/成果移交", "项目最终报告", "项目文件(更新)", "组织过程资产(更新)"] },
+            
+            // 范围
+            { ka: "scope", pg: "规划", name: "规划范围管理", i: ["项目章程", "项目管理计划", "事业环境因素", "组织过程资产"], t: ["专家判断", "数据分析", "会议"], o: ["范围管理计划", "需求管理计划"] },
+            { ka: "scope", pg: "规划", name: "收集需求", i: ["项目章程", "项目管理计划", "项目文件", "商业文件", "协议", "事业环境因素", "组织过程资产"], t: ["专家判断", "数据收集", "数据分析", "决策", "数据表现", "人际关系与团队技能", "系统交互图", "原型法"], o: ["需求文件", "需求跟踪矩阵"] },
+            { ka: "scope", pg: "规划", name: "定义范围", i: ["项目章程", "项目管理计划", "项目文件", "事业环境因素", "组织过程资产"], t: ["专家判断", "数据分析", "决策", "人际关系与团队技能", "产品分析"], o: ["项目范围说明书", "项目文件(更新)"] },
+            { ka: "scope", pg: "规划", name: "创建WBS", i: ["项目管理计划", "项目文件", "事业环境因素", "组织过程资产"], t: ["专家判断", "分解"], o: ["范围基准", "项目文件(更新)"] },
+            { ka: "scope", pg: "监控", name: "确认范围", i: ["项目管理计划", "项目文件", "核实的可交付成果", "工作绩效数据"], t: ["检查", "决策"], o: ["验收的可交付成果", "工作绩效信息", "变更请求", "项目文件(更新)"] },
+            { ka: "scope", pg: "监控", name: "控制范围", i: ["项目管理计划", "项目文件", "工作绩效数据", "组织过程资产"], t: ["数据分析"], o: ["工作绩效信息", "变更请求", "项目管理计划(更新)", "项目文件(更新)"] },
+
+            // 进度
+            { ka: "schedule", pg: "规划", name: "规划进度管理", i: ["项目章程", "项目管理计划", "事业环境因素", "组织过程资产"], t: ["专家判断", "数据分析", "会议"], o: ["进度管理计划"] },
+            { ka: "schedule", pg: "规划", name: "定义活动", i: ["项目管理计划", "事业环境因素", "组织过程资产"], t: ["专家判断", "分解", "滚动式规划", "会议"], o: ["活动清单", "活动属性", "里程碑清单", "变更请求", "项目管理计划(更新)"] },
+            { ka: "schedule", pg: "规划", name: "排列活动顺序", i: ["项目管理计划", "项目文件", "事业环境因素", "组织过程资产"], t: ["紧前关系绘图法", "确定和整合依赖关系", "提前量和滞后量", "项目管理信息系统"], o: ["项目进度网络图", "项目文件(更新)"] },
+            { ka: "schedule", pg: "规划", name: "估算活动持续时间", i: ["项目管理计划", "项目文件", "事业环境因素", "组织过程资产"], t: ["专家判断", "类比估算", "参数估算", "三点估算", "自下而上估算", "数据分析", "决策", "会议"], o: ["持续时间估算", "估算依据", "项目文件(更新)"] },
+            { ka: "schedule", pg: "规划", name: "制定进度计划", i: ["项目管理计划", "项目文件", "协议", "事业环境因素", "组织过程资产"], t: ["进度网络分析", "关键路径法", "资源优化", "数据分析", "提前量和滞后量", "进度压缩", "项目管理信息系统", "敏捷发布规划"], o: ["进度基准", "项目进度计划", "进度数据", "项目日历", "变更请求", "项目管理计划(更新)", "项目文件(更新)"] },
+            { ka: "schedule", pg: "监控", name: "控制进度", i: ["项目管理计划", "项目文件", "工作绩效数据", "组织过程资产"], t: ["数据分析", "关键路径法", "项目管理信息系统", "资源优化", "提前量和滞后量", "进度压缩"], o: ["工作绩效信息", "进度预测", "变更请求", "项目管理计划(更新)", "项目文件(更新)"] },
+
+            // 成本
+            { ka: "cost", pg: "规划", name: "规划成本管理", i: ["项目章程", "项目管理计划", "事业环境因素", "组织过程资产"], t: ["专家判断", "数据分析", "会议"], o: ["成本管理计划"] },
+            { ka: "cost", pg: "规划", name: "估算成本", i: ["项目管理计划", "项目文件", "事业环境因素", "组织过程资产"], t: ["专家判断", "类比估算", "参数估算", "自下而上估算", "三点估算", "数据分析", "项目管理信息系统", "决策"], o: ["成本估算", "估算依据", "项目文件(更新)"] },
+            { ka: "cost", pg: "规划", name: "制定预算", i: ["项目管理计划", "项目文件", "商业文件", "协议", "事业环境因素", "组织过程资产"], t: ["专家判断", "成本汇总", "数据分析", "历史信息审核", "资金限制平衡", "融资"], o: ["成本基准", "项目资金需求", "项目文件(更新)"] },
+            { ka: "cost", pg: "监控", name: "控制成本", i: ["项目管理计划", "项目资金需求", "项目文件", "工作绩效数据", "组织过程资产"], t: ["专家判断", "数据分析", "完工尚需绩效指数(TCPI)", "项目管理信息系统"], o: ["工作绩效信息", "成本预测", "变更请求", "项目管理计划(更新)", "项目文件(更新)"] },
+
+            // 质量
+            { ka: "quality", pg: "规划", name: "规划质量管理", i: ["项目章程", "项目管理计划", "项目文件", "事业环境因素", "组织过程资产"], t: ["专家判断", "数据收集", "数据分析", "决策", "数据表现", "测试与检查的规划", "会议"], o: ["质量管理计划", "质量测量指标", "项目管理计划(更新)", "项目文件(更新)"] },
+            { ka: "quality", pg: "执行", name: "管理质量", i: ["项目管理计划", "项目文件", "组织过程资产"], t: ["数据收集", "数据分析", "决策", "数据表现", "审计", "面向X的设计", "问题解决", "质量改进方法"], o: ["质量报告", "测试与评估文件", "变更请求", "项目管理计划(更新)", "项目文件(更新)"] },
+            { ka: "quality", pg: "监控", name: "控制质量", i: ["项目管理计划", "项目文件", "可交付成果", "工作绩效数据", "批准的变更请求", "事业环境因素", "组织过程资产"], t: ["数据收集", "数据分析", "检查", "测试/产品评估", "数据表现", "会议"], o: ["质量控制测量结果", "核实的可交付成果", "工作绩效信息", "变更请求", "项目管理计划(更新)", "项目文件(更新)"] },
+
+            // 资源
+            { ka: "resource", pg: "规划", name: "规划资源管理", i: ["项目章程", "项目管理计划", "项目文件", "事业环境因素", "组织过程资产"], t: ["专家判断", "数据表现", "组织理论", "会议"], o: ["资源管理计划", "团队章程", "项目文件(更新)"] },
+            { ka: "resource", pg: "规划", name: "估算活动资源", i: ["项目管理计划", "项目文件", "事业环境因素", "组织过程资产"], t: ["专家判断", "自下而上估算", "类比估算", "参数估算", "数据分析", "项目管理信息系统", "会议"], o: ["资源需求", "估算依据", "资源分解结构", "项目文件(更新)"] },
+            { ka: "resource", pg: "执行", name: "获取资源", i: ["项目管理计划", "项目文件", "事业环境因素", "组织过程资产"], t: ["决策", "人际关系与团队技能", "预分派", "虚拟团队"], o: ["物质资源分配单", "项目团队派工单", "资源日历", "变更请求", "项目管理计划(更新)", "项目文件(更新)", "事业环境因素(更新)", "组织过程资产(更新)"] },
+            { ka: "resource", pg: "执行", name: "建设团队", i: ["项目管理计划", "项目文件", "事业环境因素", "组织过程资产"], t: ["集中办公", "虚拟团队", "沟通技术", "人际关系与团队技能", "认可与奖励", "培训", "个人和团队评估", "会议"], o: ["团队绩效评价", "变更请求", "项目管理计划(更新)", "项目文件(更新)", "事业环境因素(更新)", "组织过程资产(更新)"] },
+            { ka: "resource", pg: "执行", name: "管理团队", i: ["项目管理计划", "项目文件", "工作绩效报告", "团队绩效评价", "事业环境因素", "组织过程资产"], t: ["人际关系与团队技能", "项目管理信息系统"], o: ["变更请求", "项目管理计划(更新)", "项目文件(更新)", "事业环境因素(更新)"] },
+            { ka: "resource", pg: "监控", name: "控制资源", i: ["项目管理计划", "项目文件", "工作绩效数据", "协议", "组织过程资产"], t: ["数据分析", "问题解决", "人际关系与团队技能", "项目管理信息系统"], o: ["工作绩效信息", "变更请求", "项目管理计划(更新)", "项目文件(更新)"] },
+
+            // 沟通
+            { ka: "communication", pg: "规划", name: "规划沟通管理", i: ["项目章程", "项目管理计划", "项目文件", "事业环境因素", "组织过程资产"], t: ["专家判断", "沟通需求分析", "沟通技术", "沟通模型", "沟通方法", "人际关系与团队技能", "数据表现", "会议"], o: ["沟通管理计划", "项目管理计划(更新)", "项目文件(更新)"] },
+            { ka: "communication", pg: "执行", name: "管理沟通", i: ["项目管理计划", "项目文件", "工作绩效报告", "事业环境因素", "组织过程资产"], t: ["沟通技术", "沟通方法", "沟通技能", "项目管理信息系统", "项目报告", "人际关系与团队技能", "会议"], o: ["项目沟通记录", "项目管理计划(更新)", "项目文件(更新)", "组织过程资产(更新)"] },
+            { ka: "communication", pg: "监控", name: "监督沟通", i: ["项目管理计划", "项目文件", "工作绩效数据", "事业环境因素", "组织过程资产"], t: ["专家判断", "项目管理信息系统", "数据表现", "人际关系与团队技能", "会议"], o: ["工作绩效信息", "变更请求", "项目管理计划(更新)", "项目文件(更新)"] },
+
+            // 风险
+            { ka: "risk", pg: "规划", name: "规划风险管理", i: ["项目章程", "项目管理计划", "项目文件", "事业环境因素", "组织过程资产"], t: ["专家判断", "数据分析", "会议"], o: ["风险管理计划"] },
+            { ka: "risk", pg: "规划", name: "识别风险", i: ["项目管理计划", "项目文件", "协议", "采购文档", "事业环境因素", "组织过程资产"], t: ["专家判断", "数据收集", "数据分析", "人际关系与团队技能", "提示清单", "会议"], o: ["风险登记册", "风险报告", "项目文件(更新)"] },
+            { ka: "risk", pg: "规划", name: "实施定性风险分析", i: ["项目管理计划", "项目文件", "事业环境因素", "组织过程资产"], t: ["专家判断", "数据收集", "数据分析", "人际关系与团队技能", "风险分类", "数据表现", "会议"], o: ["项目文件(更新)"] },
+            { ka: "risk", pg: "规划", name: "实施定量风险分析", i: ["项目管理计划", "项目文件", "事业环境因素", "组织过程资产"], t: ["专家判断", "数据收集", "人际关系与团队技能", "不确定性表现方式", "数据分析"], o: ["项目文件(更新)"] },
+            { ka: "risk", pg: "规划", name: "规划风险应对", i: ["项目管理计划", "项目文件", "事业环境因素", "组织过程资产"], t: ["专家判断", "数据收集", "人际关系与团队技能", "威胁应对策略", "机会应对策略", "应急应对策略", "整体项目风险应对策略", "数据分析", "决策"], o: ["变更请求", "项目管理计划(更新)", "项目文件(更新)"] },
+            { ka: "risk", pg: "执行", name: "实施风险应对", i: ["项目管理计划", "项目文件", "组织过程资产"], t: ["专家判断", "人际关系与团队技能", "项目管理信息系统"], o: ["变更请求", "项目文件(更新)"] },
+            { ka: "risk", pg: "监控", name: "监督风险", i: ["项目管理计划", "项目文件", "工作绩效数据", "工作绩效报告"], t: ["数据分析", "审计", "会议"], o: ["工作绩效信息", "变更请求", "项目管理计划(更新)", "项目文件(更新)", "组织过程资产(更新)"] },
+
+            // 采购
+            { ka: "procurement", pg: "规划", name: "规划采购管理", i: ["项目章程", "商业文件", "项目管理计划", "项目文件", "事业环境因素", "组织过程资产"], t: ["专家判断", "数据收集", "数据分析", "供方选择分析", "会议"], o: ["采购管理计划", "采购策略", "招标文件", "采购工作说明书", "供方选择标准", "自制或外购决策", "独立成本估算", "变更请求", "项目文件(更新)", "组织过程资产(更新)"] },
+            { ka: "procurement", pg: "执行", name: "实施采购", i: ["项目管理计划", "项目文件", "采购文档", "卖方建议书", "事业环境因素", "组织过程资产"], t: ["专家判断", "广告", "投标人会议", "数据分析", "人际关系与团队技能"], o: ["选定的卖方", "协议", "变更请求", "项目管理计划(更新)", "项目文件(更新)", "组织过程资产(更新)"] },
+            { ka: "procurement", pg: "监控", name: "控制采购", i: ["项目管理计划", "项目文件", "协议", "采购文档", "批准的变更请求", "工作绩效数据", "事业环境因素", "组织过程资产"], t: ["专家判断", "索赔管理", "数据分析", "检查", "审计"], o: ["采购关闭", "工作绩效信息", "采购文档(更新)", "变更请求", "项目管理计划(更新)", "项目文件(更新)", "组织过程资产(更新)"] },
+
+            // 干系人
+            { ka: "stakeholder", pg: "启动", name: "识别干系人", i: ["项目章程", "商业文件", "项目管理计划", "项目文件", "协议", "事业环境因素", "组织过程资产"], t: ["专家判断", "数据收集", "数据分析", "数据表现", "会议"], o: ["干系人登记册", "变更请求", "项目管理计划(更新)", "项目文件(更新)"] },
+            { ka: "stakeholder", pg: "规划", name: "规划干系人参与", i: ["项目章程", "项目管理计划", "项目文件", "协议", "事业环境因素", "组织过程资产"], t: ["专家判断", "数据收集", "数据分析", "决策", "数据表现", "会议"], o: ["干系人参与计划"] },
+            { ka: "stakeholder", pg: "执行", name: "管理干系人参与", i: ["项目管理计划", "项目文件", "事业环境因素", "组织过程资产"], t: ["专家判断", "沟通技能", "人际关系与团队技能", "基本规则", "会议"], o: ["变更请求", "项目管理计划(更新)", "项目文件(更新)"] },
+            { ka: "stakeholder", pg: "监控", name: "监督干系人参与", i: ["项目管理计划", "项目文件", "工作绩效数据", "事业环境因素", "组织过程资产"], t: ["数据分析", "决策", "数据表现", "沟通技能", "人际关系与团队技能", "会议"], o: ["工作绩效信息", "变更请求", "项目管理计划(更新)", "项目文件(更新)"] },
+        ];
+
+        const EXPLANATIONS = {
+            "项目章程": { t: "尚方宝剑", d: "老板给的授权书，确立项目地位，授权项目经理。" },
+            "项目管理计划": { t: "操作手册", d: "指导项目如何执行、监控和收尾的综合指南。" },
+            "事业环境因素": { t: "外部环境", d: "公司文化、市场条件等项目团队不可控的因素。" },
+            "组织过程资产": { t: "家底模板", d: "前人留下的模板、历史数据库、经验教训。" },
+            "工作绩效数据": { t: "原始记录", d: "现场干活时记录的原始数据，如“完成了50%”。" },
+            "工作绩效信息": { t: "分析结果", d: "将数据与计划对比后的结论，如“进度落后10%”。" },
+            "工作绩效报告": { t: "正式汇报", d: "整理好的文档，用于向干系人汇报项目状况。" },
+            "变更请求": { t: "修改申请", d: "对项目进行的任何修改建议，必须走流程。" },
+            "批准的变更请求": { t: "通过的修改", d: "经过CCB或PM审批通过的变更，准备执行。" },
+            "可交付成果": { t: "产品半成品", d: "项目产出的独特产品、服务或成果。" },
+            "核实的可交付成果": { t: "质检合格品", d: "经过控制质量过程检查，符合质量要求的产品。" },
+            "验收的可交付成果": { t: "客户签收品", d: "经过确认范围过程，客户签字验收的产品。" },
+            "问题日志": { t: "麻烦本", d: "记录和跟踪项目中出现的问题及责任人。" },
+            "风险登记册": { t: "雷区图", d: "记录所有已识别的风险、责任人及应对措施。" },
+            "干系人登记册": { t: "通讯录", d: "记录干系人的基本信息、评估和分类。" },
+            "假设日志": { t: "暂定条件", d: "记录所有假设条件和制约因素，需定期验证。" },
+            "经验教训登记册": { t: "错题本", d: "记录项目中的知识和经验，供未来参考。" },
+            "商业文件": { t: "生意经", d: "商业论证和效益管理计划，说明项目为何值得做。" },
+            "协议": { t: "合同", d: "具有法律约束力的文件，规定买卖双方义务。" },
+            "采购文档": { t: "标书", d: "用于征求潜在卖方建议书的文件，如RFP。" },
+            "立项管理文件": { t: "出生证明", d: "项目建议书、可行性研究报告等。" }
+        };
+
+        const CORE_LOGIC = [
+            { title: "数据流向", desc: "数据 -> 信息 -> 报告", steps: ["工作绩效数据 (原始)", "工作绩效信息 (分析后)", "工作绩效报告 (正式)"] },
+            { title: "可交付成果", desc: "做 -> 查 -> 验 -> 交", steps: ["可交付成果 (指导管理)", "核实的可交付成果 (控制质量)", "验收的可交付成果 (确认范围)", "最终产品移交 (收尾)"] },
+            { title: "变更控制", desc: "申请 -> 审批 -> 执行", steps: ["变更请求 (提出)", "批准的变更请求 (审批)", "变更日志 (记录)", "执行变更 (实施)"] }
+        ];
+
+        // --- 4. 辅助函数 ---
+        const getStyle = (name) => {
+            const clean = name.replace(/[\(\（].*[\)\）]|更新/g, "").trim();
+            if (STYLE_MAP[clean]) return STYLE_MAP[clean];
+            
+            if (clean.includes("计划")) return { icon: Icons.Book, color: "bg-blue-50 text-blue-800 border-blue-200" };
+            if (clean.includes("分析")) return { icon: Icons.Chart, color: "bg-sky-50 text-sky-800 border-sky-200" };
+            if (clean.includes("文件") || clean.includes("文档")) return { icon: Icons.File, color: "bg-slate-50 text-slate-700 border-slate-200" };
+            if (clean.includes("登记册") || clean.includes("日志")) return { icon: Icons.List, color: "bg-orange-50 text-orange-800 border-orange-200" };
+            if (clean.includes("请求")) return { icon: Icons.Alert, color: "bg-fuchsia-50 text-fuchsia-800 border-fuchsia-200" };
+            
+            return { icon: Icons.Zap, color: "bg-gray-50 text-gray-700 border-gray-200" };
+        };
+
+        const useLocalStorage = (key, initialValue) => {
+            const [storedValue, setStoredValue] = useState(() => {
+                try { return JSON.parse(window.localStorage.getItem(key)) || initialValue; } 
+                catch { return initialValue; }
+            });
+            const setValue = value => {
+                const val = value instanceof Function ? value(storedValue) : value;
+                setStoredValue(val);
+                window.localStorage.setItem(key, JSON.stringify(val));
+            };
+            return [storedValue, setValue];
+        };
+
+        // --- 5. 组件 ---
+        const Modal = ({ isOpen, onClose, title, children }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 anim-fade" onClick={onClose}>
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
+                        <div className="p-4 border-b flex justify-between items-center bg-gray-50 shrink-0">
+                            <h3 className="font-bold text-lg text-gray-800">{title}</h3>
+                            <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><Icon path={Icons.Close}/></button>
+                        </div>
+                        <div className="p-4 overflow-y-auto">{children}</div>
+                    </div>
+                </div>
+            );
+        };
+
+        const IttoItem = ({ name, mode, revealed, onClick }) => {
+            const { icon, color } = getStyle(name);
+            const isHidden = mode === 'recite' && !revealed;
+            return (
+                <div onClick={onClick} className={`flex items-center gap-2 p-2.5 mb-2 rounded border transition-all ${color} ${isHidden ? 'active:scale-95 cursor-pointer' : ''}`}>
+                    <div className="opacity-70"><Icon path={icon} size={16} /></div>
+                    <span className={`text-sm font-medium flex-1 ${isHidden ? 'blur-text' : ''}`}>{name}</span>
+                    {isHidden && <span className="text-gray-400 opacity-50"><Icon path={Icons.Eye} size={16}/></span>}
+                </div>
+            );
+        };
+
+        // 1. 至尊图 (Supreme Map)
+        const SupremeMapView = ({ onSelect, isMapRecite, setMapRecite }) => (
+            <div className="overflow-x-auto pb-2 no-scrollbar -mx-4 px-4 md:mx-0 h-full">
+                <div className="min-w-[1000px] border border-gray-200 rounded-xl shadow-sm bg-white flex flex-col h-full">
+                    <div className="p-3 border-b bg-gray-50 flex justify-between items-center shrink-0 sticky left-0">
+                        <div className="text-sm font-bold text-gray-700 flex items-center gap-2"><span className="text-indigo-600"><Icon path={Icons.Grid} /></span> 十五至尊图</div>
+                        <button onClick={() => setMapRecite(!isMapRecite)} className={`p-1.5 rounded text-xs font-bold flex items-center gap-1 transition-colors ${isMapRecite ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>
+                            <Icon path={isMapRecite ? Icons.EyeOff : Icons.Eye} size={14}/> {isMapRecite ? '背诵中' : '查看'}
+                        </button>
+                    </div>
+                    <div className="grid grid-cols-6 text-xs font-bold bg-gray-50 text-gray-600 border-b">
+                        <div className="p-2 text-center border-r bg-gray-100">领域 \ 过程组</div>
+                        {PROCESS_GROUPS.map(pg => <div key={pg} className="p-2 text-center border-r last:border-0">{pg}</div>)}
+                    </div>
+                    <div className="overflow-y-auto flex-1">
+                        {KNOWLEDGE_AREAS.map(ka => (
+                            <div key={ka.id} className="grid grid-cols-6 border-b last:border-0 hover:bg-gray-50 transition-colors min-h-[60px]">
+                                <div className={`p-2 flex items-center justify-center font-bold text-xs border-r ${ka.color}`}>{ka.name.replace('管理','')}</div>
+                                {PROCESS_GROUPS.map(pg => {
+                                    const procs = PROCESS_DATA.filter(p => p.ka === ka.id && p.pg === pg);
+                                    return (
+                                        <div key={pg} className="p-1 border-r flex flex-col justify-center gap-1">
+                                            {procs.map(proc => (
+                                                <button key={proc.name} onClick={() => onSelect(proc)} className={`w-full py-1.5 px-2 rounded text-[10px] text-center leading-tight transition-all border border-transparent hover:border-indigo-200 hover:bg-indigo-50 text-gray-700 ${isMapRecite ? 'blur-text bg-gray-100' : 'bg-white shadow-sm'}`}>
+                                                    {proc.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+
+        // 2. 复习卡片 (Review)
+        const ProcessDetail = ({ process, mode, revealed, toggle, onGenImage }) => {
+            const ka = KNOWLEDGE_AREAS.find(k => k.id === process.ka);
+            const ref = useRef();
+            
+            return (
+                <div ref={ref} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden h-full flex flex-col relative">
+                    <div className={`p-4 border-b flex justify-between items-center ${ka.darkColor} bg-opacity-30 shrink-0`}>
+                        <div>
+                            <div className="text-[10px] font-bold uppercase tracking-widest opacity-60 mb-0.5">{process.pg}过程组</div>
+                            <h2 className="text-xl font-bold text-gray-900">{process.name}</h2>
+                        </div>
+                        <button onClick={() => onGenImage(ref.current)} className="p-1.5 rounded-full bg-white/60 hover:bg-white text-indigo-600 shadow-sm transition-all"><Icon path={Icons.Camera} size={18}/></button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                        {[{t:'输入',i:Icons.ArrowRight,c:'text-blue-600',bg:'bg-blue-50',d:process.i,k:'i'},{t:'工具',i:Icons.Zap,c:'text-amber-600',bg:'bg-amber-50',d:process.t,k:'t'},{t:'输出',i:Icons.Check,c:'text-green-600',bg:'bg-green-50',d:process.o,k:'o'}].map(sec => (
+                            <div key={sec.k}>
+                                <div className={`flex items-center gap-1.5 text-xs font-bold mb-2 uppercase tracking-wider ${sec.c}`}><Icon path={sec.i} size={14}/> {sec.t}</div>
+                                <div className="grid grid-cols-1 gap-2">
+                                    {sec.d.map((item, idx) => {
+                                        const key = `${sec.k}-${idx}`;
+                                        return <IttoItem key={idx} name={item} mode={mode} revealed={revealed[key]} onClick={() => toggle(key)} />;
+                                    })}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        // 3. 统计 (Stats)
+        const StatsView = ({ onNavigate }) => {
+            const stats = useMemo(() => {
+                const map = {};
+                PROCESS_DATA.forEach(p => {
+                    [...p.i, ...p.t, ...p.o].forEach(item => {
+                        const n = item.replace(/[\(\（]更新[\)\）]/g, "").trim();
+                        if(!map[n]) map[n] = { name:n, count:0, procs:[] };
+                        map[n].count++;
+                        map[n].procs.push(p);
+                    });
+                });
+                return Object.values(map).sort((a,b) => b.count - a.count);
+            }, []);
+            const [sel, setSel] = useState(null);
+
+            return (
+                <div className="flex flex-col md:flex-row h-full gap-4 overflow-hidden">
+                    <div className="flex-1 overflow-y-auto bg-white rounded-xl border border-gray-200">
+                         <div className="p-3 border-b bg-gray-50 font-bold sticky top-0 z-10 text-sm text-gray-600">高频考点排行</div>
+                         {stats.map((s, i) => (
+                            <div key={s.name} onClick={() => setSel(s)} className={`flex justify-between p-3 border-b cursor-pointer hover:bg-indigo-50 ${sel?.name===s.name ? 'bg-indigo-50':''}`}>
+                                <div className="flex gap-3 items-center">
+                                    <span className={`text-[10px] w-5 h-5 rounded-full flex items-center justify-center ${i<3?'bg-yellow-400 text-white':'bg-gray-200 text-gray-600'}`}>{i+1}</span>
+                                    <span className="text-sm font-medium text-gray-700">{s.name}</span>
+                                </div>
+                                <span className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-500">{s.count}</span>
+                            </div>
+                         ))}
+                    </div>
+                    {sel && (
+                        <div className="fixed inset-0 z-50 bg-black/50 md:static md:bg-transparent md:w-1/2 flex items-center justify-center p-4 md:p-0" onClick={() => setSel(null)}>
+                            <div className="bg-white w-full max-w-md md:max-w-full rounded-xl shadow-xl md:shadow-none md:border border-gray-200 md:h-full flex flex-col overflow-hidden anim-fade" onClick={e => e.stopPropagation()}>
+                                <div className="p-4 border-b bg-indigo-50 flex justify-between items-start">
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="p-1.5 bg-white rounded-full text-indigo-600 shadow-sm"><Icon path={getStyle(sel.name).icon}/></span>
+                                            <h3 className="font-bold text-lg text-indigo-900">{sel.name}</h3>
+                                        </div>
+                                        {EXPLANATIONS[sel.name] && <p className="text-xs text-indigo-700 bg-white/50 p-2 rounded border border-indigo-100">{EXPLANATIONS[sel.name].d}</p>}
+                                    </div>
+                                    <button onClick={() => setSel(null)} className="md:hidden p-1 bg-white/50 rounded-full"><Icon path={Icons.Close}/></button>
+                                </div>
+                                <div className="p-4 overflow-y-auto flex-1">
+                                    <div className="text-xs font-bold text-gray-400 mb-2 uppercase">出现位置</div>
+                                    <div className="flex flex-col gap-2">
+                                        {sel.procs.map((p, i) => (
+                                            <button key={i} onClick={() => onNavigate(p)} className="p-2 border rounded text-xs text-left hover:border-indigo-300 hover:bg-indigo-50 transition-colors flex justify-between items-center group">
+                                                <span className="text-gray-700">{p.name}</span>
+                                                <Icon path={Icons.ArrowRight} size={12} className="text-indigo-300 opacity-0 group-hover:opacity-100"/>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // 4. 逻辑 (Logic)
+        const LogicView = () => {
+            const [notes, setNotes] = useLocalStorage('pmp_notes', []);
+            const [input, setInput] = useState('');
+            const noteRef = useRef();
+            const addNote = () => { if(input.trim()) { setNotes([{id:Date.now(), text:input}, ...notes]); setInput(''); } };
+            const genImage = async () => {
+                 try {
+                    const canvas = await html2canvas(noteRef.current, { scale: 2, backgroundColor: '#ffffff' });
+                    const link = document.createElement('a'); link.download = 'notes.png'; link.href = canvas.toDataURL(); link.click();
+                } catch(e) { alert("Error"); }
+            };
+
+            return (
+                <div className="h-full overflow-y-auto p-1 space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {CORE_LOGIC.map((l, i) => (
+                            <div key={i} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-100">
+                                    <span className="p-1 bg-indigo-50 rounded text-indigo-600"><Icon path={Icons.Bulb}/></span>
+                                    <h3 className="font-bold text-gray-800">{l.title}</h3>
+                                </div>
+                                <div className="space-y-3">
+                                    {l.steps.map((s, idx) => <div key={idx} className="relative pl-4 border-l-2 border-gray-100 text-xs text-gray-600"><div className={`absolute -left-[5px] top-1.5 w-2 h-2 rounded-full ${idx===0?'bg-indigo-500':'bg-gray-300'}`}></div>{s}</div>)}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                        <div className="p-4 bg-gray-50 border-b flex justify-between items-center">
+                            <h3 className="font-bold text-gray-700 flex items-center gap-2"><Icon path={Icons.Pen}/> 我的笔记</h3>
+                            <button onClick={genImage} className="text-xs text-indigo-600 font-bold flex items-center gap-1"><Icon path={Icons.Camera} size={14}/> 保存</button>
+                        </div>
+                        <div className="p-4">
+                            <div className="flex gap-2 mb-4">
+                                <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key==='Enter' && addNote()} placeholder="输入口诀..." className="flex-1 text-sm border rounded px-3 py-2 focus:ring-2 focus:ring-indigo-500 outline-none"/>
+                                <button onClick={addNote} className="bg-indigo-600 text-white px-4 rounded text-sm font-bold">添加</button>
+                            </div>
+                            <div ref={noteRef} className="bg-white p-4 min-h-[100px] border-2 border-dashed border-gray-100 rounded">
+                                {notes.length===0 ? <div className="text-center text-gray-400 text-sm py-4">暂无笔记</div> : (
+                                    <ul className="space-y-2">
+                                        {notes.map(n => (
+                                            <li key={n.id} className="flex justify-between p-2 bg-yellow-50 text-yellow-900 rounded text-sm border border-yellow-100 group">
+                                                <span>{n.text}</span>
+                                                <button onClick={() => setNotes(notes.filter(x => x.id !== n.id))} className="text-yellow-400 hover:text-yellow-600 opacity-0 group-hover:opacity-100"><Icon path={Icons.Trash} size={14}/></button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- App ---
+        const App = () => {
+            const [tab, setTab] = useState('supreme');
+            const [process, setProcess] = useState(PROCESS_DATA[0]);
+            const [mode, setMode] = useState('learn');
+            const [revealed, setRevealed] = useState({});
+            const [isMapRecite, setMapRecite] = useState(false);
+            
+            useEffect(() => setRevealed({}), [process]);
+
+            const handleNavigate = (proc) => {
+                const target = PROCESS_DATA.find(p => p.name === proc.name);
+                if(target) { setProcess(target); setTab('process'); }
+            };
+
+            const TABS = [{id:'supreme', icon:Icons.Grid, t:'至尊图'}, {id:'process', icon:Icons.Book, t:'复习'}, {id:'stats', icon:Icons.Chart, t:'统计'}, {id:'logic', icon:Icons.Bulb, t:'逻辑'}];
+
+            return (
+                <div className="flex flex-col h-screen max-w-screen-2xl mx-auto bg-white shadow-2xl overflow-hidden">
+                    <header className="bg-white border-b px-4 py-3 flex justify-between items-center z-10 h-14 shrink-0">
+                        <div className="flex items-center gap-2 font-bold text-lg text-gray-800">
+                            <span className="bg-primary text-white p-1 rounded"><Icon path={Icons.Book} size={18}/></span>
+                            <span className="hidden sm:inline">2026软考高项</span>
+                        </div>
+                        <div className="flex bg-gray-100 p-1 rounded-lg">
+                            {TABS.map(t => (
+                                <button key={t.id} onClick={() => setTab(t.id)} className={`px-3 py-1.5 rounded text-xs font-medium flex items-center gap-1 transition-all ${tab===t.id ? 'bg-white shadow text-primary' : 'text-gray-500 hover:text-gray-700'}`}>
+                                    <Icon path={t.icon} size={14}/> <span className="hidden md:inline">{t.t}</span>
+                                </button>
+                            ))}
+                        </div>
+                        <div className="w-8"></div>
+                    </header>
+
+                    <main className="flex-1 overflow-hidden bg-gray-50 p-2 md:p-6 relative">
+                        {tab === 'supreme' && <div className="h-full overflow-auto flex justify-center anim-fade"><SupremeMapView onSelect={handleNavigate} isMapRecite={isMapRecite} setMapRecite={setMapRecite} /></div>}
+                        
+                        {tab === 'process' && (
+                            <div className="h-full flex flex-col md:flex-row gap-6 max-w-6xl mx-auto anim-fade">
+                                <div className="md:w-1/3 flex flex-col h-full overflow-hidden">
+                                     <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex-1 overflow-hidden flex flex-col">
+                                        <div className="p-3 border-b bg-gray-50 font-bold text-sm text-gray-600">快速导航</div>
+                                        <div className="flex-1 overflow-y-auto p-2">
+                                            {KNOWLEDGE_AREAS.map(ka => (
+                                                <div key={ka.id} className="mb-3">
+                                                    <div className={`text-xs font-bold mb-1 px-2 py-1 rounded ${ka.color}`}>{ka.name}</div>
+                                                    <div className="grid grid-cols-1 gap-1 pl-2">
+                                                        {PROCESS_DATA.filter(p => p.ka === ka.id).map(p => (
+                                                            <button key={p.name} onClick={() => setProcess(p)} className={`text-xs text-left px-2 py-1.5 rounded transition-colors ${process.name===p.name ? 'bg-indigo-50 text-indigo-700 font-bold' : 'hover:bg-gray-50 text-gray-600'}`}>{p.name}</button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                     </div>
+                                </div>
+                                <div className="md:w-2/3 h-full overflow-hidden">
+                                    <div className="h-full flex flex-col">
+                                        <div className="mb-2 flex justify-end">
+                                            <button onClick={() => setMode(m => m==='learn'?'recite':'learn')} className={`p-1.5 rounded text-xs flex items-center gap-1 ${mode==='recite'?'bg-amber-100 text-amber-700':'bg-white border text-gray-600'}`}>
+                                                <Icon path={mode==='recite'?Icons.EyeOff:Icons.Eye} size={14}/> {mode==='recite'?'背诵中':'学习中'}
+                                            </button>
+                                        </div>
+                                        <ProcessDetail process={process} mode={mode} revealed={revealed} toggle={(k) => setRevealed(prev => ({...prev, [k]: !prev[k]}))} onGenImage={async (el) => {
+                                            const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff' });
+                                            const link = document.createElement('a'); link.download = `${process.name}.png`; link.href = canvas.toDataURL(); link.click();
+                                        }}/>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {tab === 'stats' && <div className="h-full max-w-5xl mx-auto anim-fade"><StatsView onNavigate={handleNavigate} /></div>}
+                        {tab === 'logic' && <div className="h-full max-w-5xl mx-auto anim-fade"><LogicView /></div>}
+                    </main>
+                    
+                    {/* Mobile Nav */}
+                    <nav className="md:hidden fixed bottom-0 w-full bg-white border-t px-6 py-1 pb-safe flex justify-between text-[10px] text-gray-400 z-50">
+                        {TABS.map(t => (
+                            <button key={t.id} onClick={() => setTab(t.id)} className={`flex flex-col items-center gap-1 p-2 transition-colors ${tab===t.id ? 'text-indigo-600' : ''}`}>
+                                <Icon path={t.icon} size={24} className={`transition-transform duration-200 ${tab===t.id ? 'scale-110' : 'scale-100'}`} />
+                                <span>{t.label}</span>
+                            </button>
+                        ))}
+                    </nav>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
